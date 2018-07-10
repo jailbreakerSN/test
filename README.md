@@ -11,6 +11,8 @@ L'implémentation de cette algorithme peut-être explicitée en quatres grandes 
 * [Sommaire](#sommaire)
 * [Etape 1: Extraction et Ingestion des Données](#extraction-et-ingestion-des-données)
 * [Etape 2: Prétraitement des données](#pré-processing)
+* [Etape 3: Code Spark-Scala de Clustérisation par centroide pondéré](#clustérisation-par-centroide-pondéré)
+* [Etape 4: Détermination du Home et Work Location](#détermination-du-lieu-dhabitation-et-de-travail)
 <!--te-->
 
 ## Extraction et Ingestion des Données
