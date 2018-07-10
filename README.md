@@ -5,6 +5,14 @@ Pour ce Usecase, nous avons procédé  au développement d’un **algorithme d�
 
 L'implémentation de cette algorithme peut-être explicitée en quatres grandes étapes, allant de l'acquisition des données d'antennes et CDR jusqu'à l'ingestion dans la base de données Hive, en passant par l'extraction dans la plateforme de fichiers distribués HDFS, jusqu'à la détermination des home et work location des utilisateurs présents dans notre base de données CDR.
 
+# Sommaire
+<!--ts-->
+* [Présentation du Projet] (#algorithme-danalyse-de-mouvement-de-population)
+* [Sommaire] (#sommaire)
+* [Etape 1: Extraction et Ingestion des Données] (#extraction-et-ingestion-des-données)
+* [Etape 2: Prétraitement des données] (#pré-processing)
+<!--te-->
+
 ## Extraction et Ingestion des Données
  Il s'agit de la première étape dans l'implémentation de notre algorithme. Elle consiste en l'acquisition des fichiers compréssés des relevés détaillés de communications (CDR) issus des serveurs dédiés. Une fois les données acquises au niveau de notre Namenode, on procedera alors au dézippage des fichiers puis à leur insertion au niveau des Datanodes. Ceci nous permettra d'avoir l'ensemble des données dans notre système de fichiers distribués de Hadoop (HDFS) et donc de bénéficier de tous les avantages connexes. 
  ```
