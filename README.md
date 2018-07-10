@@ -64,7 +64,7 @@ WITH SERDEPROPERTIES (
 )
 LOCATION '/data2/staging/cdrnm/sample_nov/cdr_datas';
 ```
- ## Pré-processing
+## Pré-processing
  C'est une étape très importante car permettant d'effectuer un ensemble d'opérations et de jointures afin d'agréger les données sous un format consommable par notre module de clustérisation. En effet, les données CDR formattées ne peuvent avoir de réelles significations à leur état brute. 
  De par leur volume assez important, nous avons d'abord procédé par une extraction des informations relatives à une population de 100000 clients de Dakar, présents de part et d'autre des jeux de données des mois de juillet et novembre.
  ```
@@ -109,16 +109,67 @@ from (
     from algorithmisation.person_tower_days S inner join algorithmisation.person_towers  M  on (S.caller_msisdn=M.caller_msisdn)
     ) R;
 ```
+On n'obtient alors à l'issue de cette étape de prétraitement, en plus de la table initiale (subset_of_cdr_july et subset_of_cdr_november) contenant l'ensemble des informations (heure, jour, antenne etc...)des opérations effectuées, le nombre d'antennes et de jours d'appels, avec un classement par ordre de sollicitation de l'antenne.
+
+## Clustérisation par centroide pondéré
+C'est une étape qui s'inscrit dans la continuité, en utilisant les résultats des scripts exécutés précédemment. Cependant elle diffère de celles-ci dans la mesure ou elle est codée en Scala, parce que nécessitant des fonctions et méthodes propriétaires mais aussi et surtout utilise la technologie Spark pour gagner en rapidité, dans la mesure ou nous allons procéder à des calculs hautement complexes sur l'ensemble des données (regrouper les informations par utilisateurs, jointures avec la table des antennes, calcul récursif de centroides pondérés, regroupement par utilisateur par cluster).
+Nous avons procédé par la création d'un projet Spark-Scala modulable, avec un fichier de configuration externe contenant les informations des bases de données et tables Hive utilisées dans le code. L'essentiel est d'avoir en entrée les données escomptées et donc indépendamment du jeu de données utilisées (CDR), l'execution du code produit les résultats escomptés (clustérisation par utilisateurs).
+**Quelques extraits et explications du code Spark-Scala**
  ```
-Give examples
+/**
+  * Classe permettant de stocker pour chaque utilisateur la liste des antennes qu'il a eu à utiliser
+  * @param msisdn msisdn du client
+  * @param listLocation une liste d'antennes avec les coordonnées GPS (latitude, longitude)
+  */
+class UserData(var msisdn: String, var listLocation: List[Antenna]) {
+  /**
+    * Methode qui utilise la liste des antennes de l'utilsateur courant pour clustériser
+    * @return Une liste de Clusters contenant chacun des antennes distantes de moins de 2.5 kms 
+    */
+  def getCluster(): List[Cluster] = {
+    new Create_Clusters(5).getClusters(listLocation)
+  }
+}
 ```
  ```
-Give examples
+/**
+      * Une fonction récursive (Tail recursive function) qui charge une liste d'antennes (de point d'appels) en entrée
+      * pour mettre chacune d'elles dans sont cluster appropié, suivant une distance pondéré
+      *
+      * @param listAntennas une Liste d'antennes (Point géographique d'appels des clients)
+      * @param accum        Accumulateur qui garde l'ensemble des Cluster
+      * @return Une Liste de Cluster
+      */
+    @tailrec
+    def clusterAccumulator(listAntennas: List[Antenna], accum: List[Cluster]): List[Cluster] = {
+      var nextPoint = new Antenna()
+      listAntennas match {
+        case Nil => accum
+        case x :: tail => {
+          if (indic == 0) {
+            cl = new Cluster()
+          }
+          var p = x
+          if (!tail.isEmpty) {
+            nextPoint = tail.head
+          }
+          cl.addAntenna(p)
+          var newTail = p.listSorted(tail)
+          //println("First Point" + p + " Next Point" + nextPoint)
+          if (utils.calculDistance(p.point, nextPoint.point) > 2.5 /* p.calculateThreesold(forThreesold, rnk)*/ ) {
+            indic = 0
+            clusterAccumulator(newTail, cl :: accum)
+          } else {
+            indic = 1
+            clusterAccumulator(newTail, accum)
+          }
+        }
+      }
+    }
+```
 ```
 Give examples
-```
  ```
-Give examples
 ```
 Give examples
 ```
