@@ -4,12 +4,12 @@ Algorithme d analyse de mouvement de population
 Fort de plus de trente millions de clients, le **Groupe SONATEL** stocke journalièrement une très grande masse de données mobiles (appels, SMS, sonde…).Celles-ci s’avèrent être une importante mine d’informations, à condition qu’elles soient mise à la disposition de chercheurs et data scientist, qui seront à mesure d’y appliquer des algorithmes afin d’en extraire une multitude d’information utiles à la prise de décisions pour des clients comme les structures administratives, les entreprises, les organisations non gouvernementales etc... 
 Pour ce Usecase, nous avons procédé  au développement d’un **algorithme d’analyse de mouvement de populations** avec les outils et technologies **Big Data**. Il sera question, à partir des relevés détaillés de communications ou **CDR** (Call Detail Records), de modéliser un algorithme capable de déterminer les lieux d’habitations (**home location**) et de travail (**work location**) des clients. Ainsi, l’application de cet algorithme sur des périodes antérieures et postérieures à la mise en place d’infrastructures comme l’autoroute à péage ou le Train Express Régionale permettra d’avoir une idée sur l’impact de ces travaux sur le désengorgement de la ville de Dakar, avec à l’appui des statistiques réelles sur les changements de lieux d’habitation et de travail des populations.
 
-Table of contents
+Table des Matieres
 =================
 
 <!--ts-->
    * [Algorithme d analyse de mouvement de population](#Algorithme-d-analyse-de-mouvement-de-population)
-   * [Table of contents](#table-of-contents)
+   * [Table des Matieres](#Table-des-Matieres)
    * [Installation](#installation)
    * [Usage](#usage)
       * [STDIN](#stdin)
