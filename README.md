@@ -6,11 +6,20 @@ Pour ce Usecase, nous avons procédé  au développement d’un **algorithme d�
 L'implémentation de cette algorithme peut-être explicitée en quatres grandes étapes, allant de l'acquisition des données d'antennes et CDR jusqu'à l'ingestion dans la base de données Hive, en passant par l'extraction dans la plateforme de fichiers distribués HDFS, jusqu'à la détermination des home et work location des utilisateurs présents dans notre base de données CDR.
 
 ## Extraction et Ingestion des Données
- Il s'agit de la première étape dans l'implémentation de notre algorithme. Elle consiste en l'acquisition des fichiers compréssés des relevés détaillés de communications (CDR) issus des serveurs dédiés. Une fois les données acquises au niveau de notre Namenode, on procedera alors au dézippage des fichiers puis à leur insertion au niveau des Datanodes. Cette dernière étape nous permettra d'avoir l'ensemble des données dans notre système de fichiers distribués de Hadoop (HDFS) et donc de bénéficier de tous les avantages connexes. 
+ Il s'agit de la première étape dans l'implémentation de notre algorithme. Elle consiste en l'acquisition des fichiers compréssés des relevés détaillés de communications (CDR) issus des serveurs dédiés. Une fois les données acquises au niveau de notre Namenode, on procedera alors au dézippage des fichiers puis à leur insertion au niveau des Datanodes. Ceci nous permettra d'avoir l'ensemble des données dans notre système de fichiers distribués de Hadoop (HDFS) et donc de bénéficier de tous les avantages connexes. 
  ```
-Give examples
+#!/bin/bash
+set -e
+for file in $1
+do 
+ fileToErase=`echo $file | cut -d'.' -f 1,2`
+ echo $fileToErase
+ gunzip $file 
+ hadoop fs  -put $fileToErase  /data2/staging/cdrnm/sample_jul || true 
+ gzip $fileToErase 
+done
 ```
-Il nous sera donc facile de créer la table de Hive permettant de pointer directement au niveau du repertoire de dezippage et d'appliquer le parsing adéquat pour formatter les données, de manière à pouvoir recupérer l'ensemble des données sous format d'une table structurée.
+Il nous sera donc facile, après l'execution de ce script shell, de créer la table de Hive permettant de pointer directement au niveau du repertoire de dezippage et d'appliquer le parsing adéquat pour formatter les données, de manière à pouvoir recupérer l'ensemble des données sous format d'une table structurée.
  ```
 CREATE EXTERNAL TABLE cdr_datas(
         Sequence_Number String,
@@ -56,7 +65,63 @@ WITH SERDEPROPERTIES (
 LOCATION '/data2/staging/cdrnm/sample_nov/cdr_datas';
 ```
  ## Pré-processing
- C'est une étape très importante car permettant d'effectuer un ensemble d'opérations et de jointures afin d'agréger les données sous un format consommable par notre module de clustérisation. En effet, les données CDR formattées ne peuvent avoir de réelles signification à leur état brute. De par leur volume assez important, nous avons d'abord procédé par une extraction des informations relatives à une population de 100000 clients de part et d'autre des jeux de données des mois de juillet et novembre.
+ C'est une étape très importante car permettant d'effectuer un ensemble d'opérations et de jointures afin d'agréger les données sous un format consommable par notre module de clustérisation. En effet, les données CDR formattées ne peuvent avoir de réelles significations à leur état brute. 
+ De par leur volume assez important, nous avons d'abord procédé par une extraction des informations relatives à une population de 100000 clients de Dakar, présents de part et d'autre des jeux de données des mois de juillet et novembre.
+ ```
+CREATE TABLE algorithmisation.subset_of_cdr_larger as 
+select distinct M.caller_msisdn 
+from (
+    select S.caller_msisdn, T.region 
+    from algorithmisation.cdr_datas S left join algorithmisation.antennas T on (S.ms_location=T.id_cellule) 
+    where region="Dakar"
+    ) M 
+where rand()<=0.1 distribute by rand() sort by rand() limit 100000";
+```
+Pour cibler toutes les données relatives à ces clients au niveau de la table CDR du mois de juillet, nous executons le script suivant
+ ```
+ CREATE TABLE algorithmisation.subset_of_cdr_July as 
+select * from algo_july.cdr_datas 
+where caller_msisdn in table algorithmisation.subset_of_cdr_larger ";
+```
+Nous effectuerons la même opération sur la table Hive realtive aux données CDR du mois de novembre. 
+Une fois ces tables de subset créées, nous passons à les premières opérations de traitement sur celles-ci et qui consistent à recupérer le nombre de jour d'appel qu'a effectué chaque utilisateur du réseau durant le mois concerné sur chacune des antennes et de procéder ainsi à un ranking par rapport au nombre de jour d'appel enregistré sur les différentes antennes. Pour éviter tout résultat biaisé, nous considérerons que plusieurs appels effectués le même jour sur une même antenne constitueront un même jour d'appel.
+ ```
+create table algorithmisation.person_tower_days as 
+select M.caller_msisdn, M.bts_nodeb, M.longitude, M.latitude, count(DISTINCT M.call_date) as tot_days 
+from (
+    select S.caller_msisdn, S.call_date, S.call_time, T.bts_nodeb, T.longitude, T.latitude 
+    from algorithmisation.subset_cdr_data S inner join algorithmisation.antennas T on (S.ms_location=T.id_cellule)
+    ) M 
+group by M.caller_msisdn, M.bts_nodeb, M.latitude, M.longitude;
+```
+Voici le cript Hive qui permettra de calculer et d'enregistrer le nombre total d'antennes utilisées par utilisateurs durant le mois de CDR donné.
+ ```
+create table algorithmisation.person_towers as 
+select caller_msisdn, count(DISTINCT bts_nodeb) as total_towers 
+from algorithmisation.person_tower_days group by caller_msisdn;
+```
+la jointure de ces 2 précédentes tables permet alors de créer une nouvelle table avec le nombre de jours d'appel par utilisateur et par antenne, mais aussi d'avoir le classement par utilisateur, de l'antenne la plus sollicitée à celle la moins utilisée durant le mois.
+ ```
+create table algorithmisation.person_tower_days_final as 
+select R.*, rank() over (partition by R.caller_msisdn order by R.tot_days desc, rand() desc) as rnk 
+from (
+    select S.caller_msisdn, S.bts_nodeb, S.longitude, S.latitude, S.tot_days, M.total_towers 
+    from algorithmisation.person_tower_days S inner join algorithmisation.person_towers  M  on (S.caller_msisdn=M.caller_msisdn)
+    ) R;
+```
+ ```
+Give examples
+```
+ ```
+Give examples
+```
+Give examples
+```
+ ```
+Give examples
+```
+Give examples
+```
  ```
 Give examples
 ```
