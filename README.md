@@ -114,7 +114,7 @@ On n'obtient alors à l'issue de cette étape de prétraitement, en plus de la t
 ## Clustérisation par centroide pondéré
 C'est une étape qui s'inscrit dans la continuité, en utilisant les résultats des scripts exécutés précédemment. Cependant elle diffère de celles-ci dans la mesure ou elle est codée en Scala, parce que nécessitant des fonctions et méthodes propriétaires mais aussi et surtout utilise la technologie Spark pour gagner en rapidité, dans la mesure ou nous allons procéder à des calculs hautement complexes sur l'ensemble des données (regrouper les informations par utilisateurs, jointures avec la table des antennes, calcul récursif de centroides pondérés, regroupement par utilisateur par cluster).
 Nous avons procédé par la création d'un projet Spark-Scala modulable, avec un fichier de configuration externe contenant les informations des bases de données et tables Hive utilisées dans le code. L'essentiel est d'avoir en entrée les données escomptées et donc indépendamment du jeu de données utilisées (CDR), l'execution du code produit les résultats escomptés (clustérisation par utilisateurs).
-**Quelques extraits et explications du code Spark-Scala**
+* **Quelques extraits et explications du code Spark-Scala**
  ```
 /**
   * Classe permettant de stocker pour chaque utilisateur la liste des antennes qu'il a eu à utiliser
@@ -168,10 +168,59 @@ class UserData(var msisdn: String, var listLocation: List[Antenna]) {
     }
 ```
 ```
-Give examples
+/**
+    * Calcul de la distance entre 2 points géographiques avec les coordonées Latitude et Longitude
+    * @return la distance en Km entre les 2 points
+    */
+  def calculDistance(): Double = {
+
+    val latDistance = A_rad.latitude - B_rad.latitude
+    val lngDistance = A_rad.longitude - B_rad.longitude
+
+    val sinLat = Math.sin(latDistance / 2)
+    val sinLng = Math.sin(lngDistance / 2)
+
+    val a = sinLat * sinLat +
+      (Math.cos(A_rad.latitude)
+        * Math.cos(B_rad.latitude)
+        * sinLng * sinLng)
+    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    val AVERAGE_RADIUS_OF_EARTH_KM = 6371
+    AVERAGE_RADIUS_OF_EARTH_KM * c
+  }
  ```
 ```
-Give examples
+ /**
+    * Methode appelée lors de la clutérisation d'une liste de points d'appels d'un client
+    * qui calcule le centre de deux points d'appels géographiques,
+    * pondérés par rapport au nombres d'appels effectués sur chaque point d'appel
+    * @return Un nouveau point
+    */
+  def centroidePond(): Point = {
+
+    // Conversion des coordonnées du Point A en coordonnées cartésiennes
+    var x1 = Math.cos(A_rad.latitude) * Math.cos(A_rad.longitude)
+    var y1 = Math.cos(A_rad.latitude) * Math.sin(A_rad.longitude)
+    var z1 = Math.sin(A_rad.latitude)
+    // Conversion des coordonnées du Point B en coordonnées cartésiennes
+    var x2 = Math.cos(B_rad.latitude) * Math.cos(B_rad.longitude)
+    var y2 = Math.cos(B_rad.latitude) * Math.sin(B_rad.longitude)
+    var z2 = Math.sin(B_rad.latitude)
+
+    // Calcul des coordonnées du centroide pondéré par le poids de chaque point
+    var totPond = point_A.weight + point_B.weight
+    val pond_A = (point_A.weight / totPond)
+    val pond_B = (point_B.weight / totPond)
+    var xm = x1 * pond_A + x2 * pond_B
+    var ym = y1 * pond_A + y2 * pond_B
+    var zm = z1 * pond_A + z2 * pond_B
+    // Recupération des coordonnées latitude et longitude du centroide en radian
+    var lon = Math.atan2(ym, xm)
+    var hyp = Math.sqrt(xm * xm + ym * ym)
+    var lat = Math.atan2(zm, hyp)
+
+    toDegree(new Point(lat, lon, point_A.weight + point_B.weight))
+  }
 ```
  ```
 Give examples
