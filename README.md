@@ -7,10 +7,10 @@ L'implémentation de cette algorithme peut-être explicitée en quatres grandes 
 
 # Sommaire
 <!--ts-->
-* [Présentation du Projet] (#algorithme-danalyse-de-mouvement-de-population)
-* [Sommaire] (#sommaire)
-* [Etape 1: Extraction et Ingestion des Données] (#extraction-et-ingestion-des-données)
-* [Etape 2: Prétraitement des données] (#pré-processing)
+* [Présentation du Projet](#algorithme-danalyse-de-mouvement-de-population)
+* [Sommaire](#sommaire)
+* [Etape 1: Extraction et Ingestion des Données](#extraction-et-ingestion-des-données)
+* [Etape 2: Prétraitement des données](#pré-processing)
 <!--te-->
 
 ## Extraction et Ingestion des Données
