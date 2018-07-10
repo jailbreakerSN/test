@@ -1,4 +1,4 @@
-Algorithme d'analyse de mouvement de population
+Algorithme d analyse de mouvement de population
 =========
 
 Fort de plus de trente millions de clients, le **Groupe SONATEL** stocke journalièrement une très grande masse de données mobiles (appels, SMS, sonde…).Celles-ci s’avèrent être une importante mine d’informations, à condition qu’elles soient mise à la disposition de chercheurs et data scientist, qui seront à mesure d’y appliquer des algorithmes afin d’en extraire une multitude d’information utiles à la prise de décisions pour des clients comme les structures administratives, les entreprises, les organisations non gouvernementales etc... 
@@ -8,7 +8,7 @@ Table of contents
 =================
 
 <!--ts-->
-   * [Algorithme d'analyse de mouvement de population](#Algorithme-d'analyse-de-mouvement-de-population)
+   * [Algorithme d analyse de mouvement de population](#Algorithme-d-analyse-de-mouvement-de-population)
    * [Table of contents](#table-of-contents)
    * [Installation](#installation)
    * [Usage](#usage)
