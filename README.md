@@ -1,4 +1,4 @@
-# Algorithme d analyse de mouvement de population
+# Algorithme d'analyse de mouvement de population
 
 Fort de plus de trente millions de clients, le **Groupe SONATEL** stocke journalièrement une très grande masse de données mobiles (appels, SMS, sonde…).Celles-ci s’avèrent être une importante mine d’informations, à condition qu’elles soient mise à la disposition de chercheurs et data scientist, qui seront à mesure d’y appliquer des algorithmes afin d’en extraire une multitude d’information utiles à la prise de décisions pour des clients comme les structures administratives, les entreprises, les organisations non gouvernementales etc... 
 Pour ce Usecase, nous avons procédé  au développement d’un **algorithme d’analyse de mouvement de populations** avec les outils et technologies **Big Data**. Il sera question, à partir des relevés détaillés de communications ou **CDR** (Call Detail Records), de modéliser un algorithme capable de déterminer les lieux d’habitations (**home location**) et de travail (**work location**) des clients. Ainsi, l’application de cet algorithme sur des périodes antérieures et postérieures à la mise en place d’infrastructures comme l’autoroute à péage ou le Train Express Régionale permettra d’avoir une idée sur l’impact de ces travaux sur le désengorgement de la ville de Dakar, avec à l’appui des statistiques réelles sur les changements de lieux d’habitation et de travail des populations.
@@ -155,8 +155,8 @@ class UserData(var msisdn: String, var listLocation: List[Antenna]) {
           }
           cl.addAntenna(p)
           var newTail = p.listSorted(tail)
-          //println("First Point" + p + " Next Point" + nextPoint)
-          if (utils.calculDistance(p.point, nextPoint.point) > 2.5 /* p.calculateThreesold(forThreesold, rnk)*/ ) {
+          //Vérifier si la distance est inférieure 2 points à 2.5 kms, distance choisie par nous
+          if (utils.calculDistance(p.point, nextPoint.point) > 2.5) {
             indic = 0
             clusterAccumulator(newTail, cl :: accum)
           } else {
@@ -194,7 +194,7 @@ class UserData(var msisdn: String, var listLocation: List[Antenna]) {
     * Methode appelée lors de la clutérisation d'une liste de points d'appels d'un client
     * qui calcule le centre de deux points d'appels géographiques,
     * pondérés par rapport au nombres d'appels effectués sur chaque point d'appel
-    * @return Un nouveau point
+    * @return Un nouveau point ayant pour poids(nombre d'appels) égale à la sommes de ceux des 2 points 
     */
   def centroidePond(): Point = {
 
@@ -222,6 +222,85 @@ class UserData(var msisdn: String, var listLocation: List[Antenna]) {
     toDegree(new Point(lat, lon, point_A.weight + point_B.weight))
   }
 ```
+Après avoir exécuté l'ensemble de ces opérations sur les données, nous enregistrons alors les résultats finaux obtenus au niveau d'une nouvelle table Hive. Celle-ci comportera pour chaque ligne dans la colonne l'identifiant de l'utisateur, l'antenne qu'il a utilisé pour effectuer une opération sur le réseau, ainsi que le cluster auquel appartient cet antenne, avec les coordonnées géographiques de celui-ci.
+
  ```
-Give examples
+    /**
+      * Mapping des listes des clients et de leurs clusters pour préparer leur enregistrement plat dans Hive
+      */
+    var lcPersistRDD = sparkContext.parallelize(lcPersist, 100).
+      map {
+        case f => (f.caller_msisdn, f.bts_nodeb, f.cluster_id, f.centroid_lat, f.centroid_long)
+      }
+
+```
+ ```
+    /**
+      * Création de la Dataframe et Enregistrement dans une table Hive
+      */
+    var myDF = hiveContext.createDataFrame(lcPersistRDD).toDF("caller_msisdn", "bts_nodeb", "cluster_id", "centroid_lat", "centroid_long")
+    myDF.registerTempTable("cluster_test_")
+    hiveContext.sql("use "+database)
+    hiveContext.sql("create table clusters_jul17 as select * from cluster_test_")
+
+```
+
+Il faudra alors ensuite générer le fichier executable (.jar) correspondant au projet Spark-Scala pour pouvoir le déployer au niveau de notre cluster et l'executer sur la plateforme afin de créer la table des clusters définies dans le code Spark-Scala.
+* ** Script Shell d'execution du fichier executable du code Spark-Scala dans le Cluster
+ ```
+spark-submit --master yarn --jars config-1.2.1.jar --driver-memory 150g --executor-memory 170g --num-executors 3 --conf spark.akka.frameSize=200 --conf "spark.driver.maxResultSize=0" --class com.sonatel.vikings.main.Main vikings_2.10-0.1.jar application.conf
+```
+
+## Détermination du Lieu d'habitation et de travail
+Après avoir appliqué des scripts de pré processing pour obtenir pour chaque utilisateurs une liste de Cluster par rapport à ses points d'appels, nous allons maintenant executer des requêtes allant dans le sens de déterminer les lieux d'habitation et de travail des utilisateurs. Pour chaque Cluster donné, nous faisons une jointure avec la table initiale pour recupérer toutes les informations relatives au jour et heure d'appels afin d'appliquer les hyphothèses suivantes:
+* On affectera la valeur -1 à tous les appels effectués le week-end (Samedi et Dimanche)
+* On affectera la valeur -1 à tous les appels effectués entre minuit(19h00) et 07 heures du matin
+* On affectera la valeur  1 à tous les appels effectués entre 09 heures et 17 heures du soir
+* On affectera la valeur 0 à tous les autres appels effectués en dehors de ces plages d'heures définies précédemment
+Les valeurs négatives signifie que ces heures d'appels devraient plus ou moins trouver la personne à son domicile (home location) alors que les valeurs positives (+1) correspondraient à son lieu de travail (work location).
+ ```
+create table algorithmisation.person_cluster_all as 
+select W.*, 
+CASE 
+    WHEN(Day_of_Week=6) THEN -1 
+    WHEN(Day_of_Week=7) THEN -1 
+    WHEN(call_time>000000 AND call_time<070000) THEN -1 
+    WHEN(call_time>090000 AND call_time<170000 AND Day_of_Week!=6 AND Day_of_Week!=7) THEN 1 
+    WHEN(call_time>190000) THEN -1 
+    ELSE 0 
+END AS dummy 
+from (
+    select A.caller_msisdn, A.call_date, A.call_time, A.ms_location, B.cluster_id, B.centroid_lat, B.centroid_long, from_unixtime(unix_timestamp(call_date,'yyyyMMdd'),'u') as Day_of_Week 
+    from (
+        select S.caller_msisdn, S.call_date, S.call_time, S.ms_location, T.bts_nodeb 
+        from algo_july.subset_of_cdr_july S 
+        left join algorithmisation.antennas T on (S.ms_location=T.id_cellule)
+    ) A left join algo_july.clusters_jul17  B on (A.bts_nodeb=B.bts_nodeb AND trim(A.caller_msisdn)=trim(B.caller_msisdn))
+) W;
+```
+Nous procédons à une aggrégation en calculant la somme totale des indices (+1 et -1) par cluster pour déterminer relativement le type de lieu que correspondrait chaque cluster. 
+ ```
+create table algorithmisation.person_cluster_all2 as 
+select A.caller_msisdn, A.cluster_id, A.centroid_lat, A.centroid_long,  SUM(dummy) as tot_cat 
+from (
+    select B.caller_msisdn, B.call_date, B.call_time, B.dummy, C.cluster_id, B.centroid_lat, B.centroid_long 
+    FROM algorithmisation.person_cluster_all B  inner join algorithmisation.person_cluster_days C on (B.cluster_id=C.cluster_id)
+    ) A 
+GROUP BY A.caller_msisdn, A.cluster_id, A.centroid_lat, A.centroid_long;
+```
+En effet plus cette valeur est négative (synonyme d'un nombre élevé d'appels à des heures qui devraient le trouver à son domicile), plus on est en mesure de dire que ce cluster est son lieu d'habitation et vice versa, plus cette valeur est positive, plus ce cluster indiquerait son lieu de travail.
+* Lieu d'habitation
+ ```
+create table algorithmisation.person_cluster_home as 
+select * from  algorithmisation.person_cluster_all2 where tot_cat<0;
+```
+* Lieu de Travail
+ ```
+create table algorithmisation.person_cluster_work as 
+select * from  algorithmisation.person_cluster_all2 where tot_cat>0;
+```
+ ```
+Dame NDIAYE, 
+SONATEL/IL@B
+Ingénieur de Conception en Génie Informatique et Télécommunications
 ```
